@@ -1,0 +1,36 @@
+<?php
+// Получение данных из веб-хука
+$data = json_decode(file_get_contents('php://input'), true);
+
+// Проверка условия
+if (strpos($data['data']['FIELDS']['TITLE'], 'Запись на приём') !== false) {
+    // Получение комментария к делу
+    $dealId = $data['data']['FIELDS']['ID'];
+    $deal = callBitrix24Method('crm.deal.get', ['id' => $dealId]);
+    $comment = $deal['result']['COMMENTS'];
+
+    // Поиск номера телефона в комментарии
+    preg_match('/\+?\d{10,15}/', $comment, $matches);
+    $phoneNumber = $matches[0];
+
+    // Обновление контакта
+    $contactId = $deal['result']['CONTACT_ID'];
+    callBitrix24Method('crm.contact.update', [
+        'id' => $contactId,
+        'fields' => [
+            'PHONE' => [['VALUE' => $phoneNumber, 'VALUE_TYPE' => 'WORK']]
+        ]
+    ]);
+}
+
+function callBitrix24Method($method, $params) {
+    $url = 'https://your-bitrix24-domain/rest/your-webhook-key/' . $method;
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($params));
+    $response = curl_exec($ch);
+    curl_close($ch);
+    return json_decode($response, true);
+}
+?>
